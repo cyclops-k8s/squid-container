@@ -84,7 +84,7 @@ COPY --from=builder /app/out/etc /etc/
 COPY --from=builder /app/out/usr /usr/
 COPY --from=builder /app/out/var /var/
 COPY entrypoint.sh /entrypoint.sh
-RUN apt-get update \
+RUN apt-get update && \
     apt-get install -y --no-install-recommends \
         ca-certificates \
         libltdl7 \
