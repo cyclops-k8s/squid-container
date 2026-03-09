@@ -1,8 +1,9 @@
 FROM ubuntu:26.04 AS builder
+ENV DEBIAN_FRONTEND=noninteractive
 SHELL ["/bin/bash", "-c"]
 WORKDIR /app
-RUN apt update
-RUN apt install -y \
+RUN apt-get update
+RUN apt-get install -y \
         build-essential \
         cmake \
         git \
@@ -71,10 +72,12 @@ RUN ./configure \
 # Use 10 more threads than the number of processors to speed up the build, as some tasks are not fully parallelizable.
 RUN make -j$(( $(nproc) + 10 ))
 ENV DESTDIR=/app/out
-RUN make install && \
+RUN make install-strip && \
     rm -rf /app/out/var/run
 
 FROM ubuntu:26.04
+ENV DEBIAN_FRONTEND=noninteractive
+
 WORKDIR /
 
 COPY --from=builder /app/out/etc /etc/
@@ -82,8 +85,7 @@ COPY --from=builder /app/out/usr /usr/
 COPY --from=builder /app/out/var /var/
 COPY entrypoint.sh /entrypoint.sh
 COPY health-check.sh /health-check.sh
-
-RUN apt-get update && \
+RUN apt-get update \
     apt-get install -y --no-install-recommends \
         ca-certificates \
         libltdl7 \
