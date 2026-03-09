@@ -23,7 +23,7 @@ jobs:
     
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0  # Fetch all history to check last commit date
       
@@ -60,7 +60,7 @@ jobs:
       
       - name: Re-checkout repository if keepalive was changed
         if: steps.keepalive.outputs.keepalive_changed == 'true'
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
       
