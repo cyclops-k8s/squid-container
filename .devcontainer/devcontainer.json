@@ -1,0 +1,26 @@
+{
+    "name": "Squid Proxy Development",
+    "image": "mcr.microsoft.com/devcontainers/base:ubuntu",
+    "features": {
+        "ghcr.io/devcontainers/features/docker-outside-of-docker:1": {
+            "version": "latest",
+            "moby": false
+        }
+    },
+    "mounts": [
+        "source=/var/run/docker.sock,target=/var/run/docker.sock,type=bind"
+    ],
+    "customizations": {
+        "vscode": {
+            "extensions": [
+                "ms-azuretools.vscode-docker",
+                "github.vscode-pull-request-github",
+                "github.copilot",
+                "github.copilot-chat",
+                "github.vscode-github-actions"
+            ]
+        }
+    },
+    "remoteUser": "vscode",
+    "postCreateCommand": "docker --version"
+}
