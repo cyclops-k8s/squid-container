@@ -97,7 +97,7 @@ jobs:
             echo "push_image=false" >> $GITHUB_OUTPUT
           fi
       - name: Build and push Docker image
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           push: ${{ steps.should-push.outputs.push_image == 'true' }}
