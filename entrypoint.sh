@@ -15,4 +15,4 @@ done
 tail -F /var/log/squid/access.log &
 tail -F /var/log/squid/store.log &
 
-squid -NYCd 1 -f /etc/squid/squid.conf
+exec squid -NYCd 1 -f /etc/squid/squid.conf

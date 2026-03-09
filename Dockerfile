@@ -76,16 +76,22 @@ RUN make install && \
 
 FROM ubuntu:26.04
 WORKDIR /
+
 COPY --from=builder /app/out/etc /etc/
 COPY --from=builder /app/out/usr /usr/
 COPY --from=builder /app/out/var /var/
+COPY entrypoint.sh /entrypoint.sh
+COPY health-check.sh /health-check.sh
+
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
         ca-certificates \
-        libltdl7 && \
+        libltdl7 \
+        curl && \
     rm -rf /var/lib/apt/lists/*
 RUN chown proxy:proxy /run
 RUN chown -R proxy:proxy /var/spool/squid /var/log/squid
-COPY entrypoint.sh /entrypoint.sh
+
 USER proxy
+
 ENTRYPOINT ["/entrypoint.sh"]
