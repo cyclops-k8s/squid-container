@@ -1,6 +1,7 @@
 #!/bin/bash
 
 set -e
+CREATED_SSL_DB=false
 
 echo "Generating TLS Cert cache directories..."
 if [ ! -d /squid-state/ssl_db ]
@@ -9,6 +10,7 @@ then
         echo "Error: Failed to create /squid-state/ssl_db" >&2
         exit 1
     }
+    CREATED_SSL_DB=true
 fi
 
 # Ensure the SSL cache directory is writable by the current user
@@ -22,7 +24,11 @@ then
     fi
 fi
 
-/usr/lib/squid/security_file_certgen -c -s /squid-state/ssl_db -M 4MB
+if [ "$CREATED_SSL_DB" = true ]
+then
+    echo "Initializing SSL cache directory..."
+    /usr/lib/squid/security_file_certgen -c -s /squid-state/ssl_db -M 4MB
+fi
 
 echo "Creating cache directories..."
 rm -f /run/squid.pid
