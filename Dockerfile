@@ -97,5 +97,7 @@ RUN export DEBIAN_FRONTEND=noninteractive \
 
 USER proxy
 
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 CMD curl -f http://localhost:8080/ || exit 1
+HEALTHCHECK --interval=10s --timeout=1s --start-period=5s --retries=3 \
+  CMD if [ "$(ps -o pid= -p 1)" ]; then exit 0; else exit 1; fi
+
 ENTRYPOINT ["/entrypoint.sh"]

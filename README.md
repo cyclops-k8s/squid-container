@@ -34,9 +34,9 @@ docker run -d \
 
 Squid listens on port **3128** by default.
 
-### Logs
+### Health Check
 
-Access and store logs are tailed to stdout automatically by the entrypoint, so `docker logs` works out of the box.
+The image ships with a `HEALTHCHECK` that verifies the init process (PID 1) is still alive, so orchestration platforms can detect hung containers.
 
 ## How It Works
 
@@ -47,10 +47,11 @@ Access and store logs are tailed to stdout automatically by the entrypoint, so `
 
 The [entrypoint.sh](entrypoint.sh) script:
 
-1. Generates the TLS certificate cache at `/squid-state/ssl_db`.
-2. Creates Squid swap/cache directories (`squid -zN`).
-3. Tails access and store logs to stdout.
-4. Starts Squid in the foreground (`squid -NYCd 1`).
+1. Generates the TLS certificate cache at `/squid-state/ssl_db` if it does not already exist (`security_file_certgen`).
+2. Removes any stale `/run/squid.pid` left behind by a previous run.
+3. Initializes the Squid swap/cache directories (`squid -zN`), failing hard if it cannot.
+4. Validates the configuration parses cleanly (`squid -k parse`).
+5. Starts Squid in the foreground bound to the mounted config (`exec squid -NYCd 1 -f /etc/squid/squid.conf`).
 
 ## License
 

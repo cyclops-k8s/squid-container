@@ -6,7 +6,7 @@ on:
     - cron: '0 1 * * 0'
   workflow_dispatch:
 jobs:
-  build-and-push-image:
+  build-keepalive:
     runs-on:
       group: Default
     permissions:

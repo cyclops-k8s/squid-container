@@ -33,7 +33,6 @@
         "ms-vscode.remote-repositories",
         "ms-vscode.remote-server",
         "ms-vscode.vscode-chat-customizations-evaluations",
-        "ollama.ollama",
         "redhat.vscode-yaml",
         "timonwong.shellcheck"
       ]
