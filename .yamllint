@@ -1,0 +1,7 @@
+extends: default
+
+rules:
+  indentation:
+    indent-sequences: false
+  document-start: disable
+  line-length: disable

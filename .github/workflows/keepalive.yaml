@@ -1,0 +1,48 @@
+name: Cron-job keepalive
+run-name: Cron-job keepalive
+on:
+  schedule:
+    # Run every Sunday at 01:00 UTC
+    - cron: '0 1 * * 0'
+  workflow_dispatch:
+jobs:
+  build-and-push-image:
+    runs-on:
+      group: Default
+    permissions:
+      contents: write
+    steps:
+
+      - name: Check out repository code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Check last commit date and create keepalive commit if needed
+        id: keepalive
+        run: |
+          # Get the date of the last commit in seconds since epoch
+          LAST_COMMIT_DATE=$(git log -1 --format=%ct)
+          CURRENT_DATE=$(date +%s)
+
+          # Calculate the difference in days
+          DAYS_SINCE_COMMIT=$(( (CURRENT_DATE - LAST_COMMIT_DATE) / 86400 ))
+
+          echo "Days since last commit: $DAYS_SINCE_COMMIT"
+
+          if [ $DAYS_SINCE_COMMIT -gt 30 ]; then
+            echo "Last commit was more than 30 days ago. Creating keepalive commit."
+
+            # Configure git
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+
+            # Create a keepalive file with timestamp
+            echo "Keepalive: $(date -u +"%Y-%m-%d %H:%M:%S UTC")" > .keepalive
+            git add .keepalive
+            git commit -m "chore: keepalive commit for workflow"
+            git push
+
+            echo "keepalive_changed=true" >> $GITHUB_OUTPUT
+          else
+            echo "Last commit was within 30 days. No keepalive needed."
+            echo "keepalive_changed=false" >> $GITHUB_OUTPUT
+          fi

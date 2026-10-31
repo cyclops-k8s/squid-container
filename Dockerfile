@@ -1,19 +1,20 @@
 FROM ubuntu:26.04 AS builder
-ENV DEBIAN_FRONTEND=noninteractive
-SHELL ["/bin/bash", "-c"]
+RUN export DEBIAN_FRONTEND=noninteractive \
+    && apt-get update \
+    && apt-get dist-upgrade --auto-remove --purge --yes \
+    && apt-get install --no-install-recommends --yes \
+            autoconf-archive \
+            automake \
+            build-essential \
+            ca-certificates \
+            cmake \
+            ed \
+            git \
+            gnutls-bin \
+            libltdl-dev \
+            libssl-dev \
+            libtool-bin
 WORKDIR /app
-RUN apt-get update
-RUN apt-get install -y \
-        build-essential \
-        cmake \
-        git \
-        ed \
-        automake \
-        autoconf-archive \
-        gnutls-bin \
-        libtool-bin \
-        libssl-dev
-
 RUN git clone --depth 1 --branch v7 https://github.com/squid-cache/squid.git
 WORKDIR /app/squid
 RUN ./bootstrap.sh
@@ -62,21 +63,18 @@ RUN ./configure \
         --with-pidfile=/run/squid.pid \
         --with-swapdir=/var/spool/squid \
         build_alias=x86_64-linux-gnu \
+        BUILDCXX=g++ \
+        BUILDCXXFLAGS='-g -O2 -fno-omit-frame-pointer -mno-omit-leaf-frame-pointer -ffile-prefix-map=/build/squid-z38kMa/squid-6.13=. -flto=auto -ffat-lto-objects -fstack-protector-strong -fstack-clash-protection -Wformat -Werror=format-security -fcf-protection -fdebug-prefix-map=/build/squid-z38kMa/squid-6.13=/usr/src/squid-6.13-0ubuntu0.24.04.3 -Wno-error=deprecated-declarations -Wdate-time -D_FORTIFY_SOURCE=3 -Wl,-Bsymbolic-functions -flto=auto -ffat-lto-objects -Wl,-z,relro -Wl,-z,now ' \
         CFLAGS='-g -O2 -fno-omit-frame-pointer -mno-omit-leaf-frame-pointer -ffile-prefix-map=/build/squid-z38kMa/squid-6.13=. -flto=auto -ffat-lto-objects -fstack-protector-strong -fstack-clash-protection -Wformat -Werror=format-security -fcf-protection -fdebug-prefix-map=/build/squid-z38kMa/squid-6.13=/usr/src/squid-6.13-0ubuntu0.24.04.3 -Wno-error=deprecated-declarations' \
-        LDFLAGS='-Wl,-Bsymbolic-functions -flto=auto -ffat-lto-objects -Wl,-z,relro -Wl,-z,now ' \
         CPPFLAGS='-Wdate-time -D_FORTIFY_SOURCE=3' \
         CXXFLAGS='-g -O2 -fno-omit-frame-pointer -mno-omit-leaf-frame-pointer -ffile-prefix-map=/build/squid-z38kMa/squid-6.13=. -flto=auto -ffat-lto-objects -fstack-protector-strong -fstack-clash-protection -Wformat -Werror=format-security -fcf-protection -fdebug-prefix-map=/build/squid-z38kMa/squid-6.13=/usr/src/squid-6.13-0ubuntu0.24.04.3 -Wno-error=deprecated-declarations' \
-        BUILDCXXFLAGS='-g -O2 -fno-omit-frame-pointer -mno-omit-leaf-frame-pointer -ffile-prefix-map=/build/squid-z38kMa/squid-6.13=. -flto=auto -ffat-lto-objects -fstack-protector-strong -fstack-clash-protection -Wformat -Werror=format-security -fcf-protection -fdebug-prefix-map=/build/squid-z38kMa/squid-6.13=/usr/src/squid-6.13-0ubuntu0.24.04.3 -Wno-error=deprecated-declarations -Wdate-time -D_FORTIFY_SOURCE=3 -Wl,-Bsymbolic-functions -flto=auto -ffat-lto-objects -Wl,-z,relro -Wl,-z,now ' \
-        BUILDCXX=g++
-
-# Use 10 more threads than the number of processors to speed up the build, as some tasks are not fully parallelizable.
+        LDFLAGS='-Wl,-Bsymbolic-functions -flto=auto -ffat-lto-objects -Wl,-z,relro -Wl,-z,now '
 RUN make -j$(( $(nproc) + 10 ))
-ENV DESTDIR=/app/out
-RUN make install-strip && \
-    rm -rf /app/out/var/run
+RUN export DESTDIR=/app/out \
+    && make install-strip \
+    && rm -rf /app/out/var/run
 
 FROM ubuntu:26.04
-ENV DEBIAN_FRONTEND=noninteractive
 
 WORKDIR /
 
@@ -84,15 +82,20 @@ COPY --from=builder /app/out/etc /etc/
 COPY --from=builder /app/out/usr /usr/
 COPY --from=builder /app/out/var /var/
 COPY entrypoint.sh /entrypoint.sh
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends \
-        ca-certificates \
-        libltdl7 \
-        curl && \
-    rm -rf /var/lib/apt/lists/*
-RUN chown proxy:proxy /run
-RUN chown -R proxy:proxy /var/spool/squid /var/log/squid
+
+RUN export DEBIAN_FRONTEND=noninteractive \
+    && apt-get update \
+    && apt-get dist-upgrade --auto-remove --purge --yes \
+    && apt-get install --no-install-recommends --yes \
+            ca-certificates \
+            curl \
+            libltdl7 \
+    && rm -rf /var/lib/apt/lists/* \
+    && mkdir -p /squid-state \
+    && chown proxy:proxy /run /squid-state \
+    && chown -R proxy:proxy /var/spool/squid /var/log/squid /squid-state
 
 USER proxy
 
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 CMD curl -f http://localhost:8080/ || exit 1
 ENTRYPOINT ["/entrypoint.sh"]

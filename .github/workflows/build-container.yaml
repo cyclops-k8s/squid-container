@@ -1,0 +1,167 @@
+name: Build Container
+run-name: Build Container
+
+on:
+  schedule:
+  # Run every Sunday at 01:00 UTC
+  - cron: '0 1 * * 0'
+  push:
+    branches:
+    - main
+  pull_request:
+    branches:
+    - main
+  workflow_dispatch:
+
+env:
+  CONTEXT: .
+  DOCKERFILE: ./Dockerfile
+  IMAGE_NAME: squid
+  IMAGE_REPOSITORY: cyclops-k8s
+  REGISTRY: quay.io
+
+jobs:
+  build-and-push:
+    permissions:
+      attestations: write
+      contents: read
+      id-token: write
+      security-events: read
+
+    runs-on:
+      group: Default
+
+    steps:
+    - name: Check out repository
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        fetch-depth: 0
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+    - name: Extract metadata for Docker
+      id: meta
+      uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
+      with:
+        images: ${{ env.REGISTRY }}/${{ env.IMAGE_REPOSITORY }}/${{ env.IMAGE_NAME }}
+        tags: |
+          type=raw,value=latest
+          type=sha,prefix={{date 'YYYY-MM-DD'}}-
+          type=raw,value={{date 'YYYY-MM-DD'}}
+
+    - name: Build image
+      uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+      with:
+        context: ${{ env.CONTEXT }}
+        file: ${{ env.DOCKERFILE }}
+        labels: ${{ steps.meta.outputs.labels }}
+        load: true
+        push: false
+        tags: ${{ steps.meta.outputs.tags }}
+
+    - name: Save image to tarball
+      run: |
+        docker image save ${{ env.REGISTRY }}/${{ env.IMAGE_REPOSITORY }}/${{ env.IMAGE_NAME }}:latest -o ${{ github.workspace }}/image.tar
+
+    - name: Generate Trivy json report
+      uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+      with:
+        exit-code: 0
+        format: json
+        hide-progress: true
+        ignore-unfixed: true
+        input: ${{ github.workspace }}/image.tar
+        list-all-pkgs: true
+        output: ${{ github.workspace }}/trivy-report.json
+        scanners: vuln,secret,config
+        trivyignores: .trivyignore.yaml
+
+    - name: Upload Trivy JSON report
+      uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+      with:
+        name: trivy-report-json
+        path: ${{ github.workspace }}/trivy-report.json
+        retention-days: 30
+
+    - name: Download Trivy HTML template
+      run: |
+        mkdir -p $HOME/.local/bin/trivy-bin/contrib
+        curl -L https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/html.tpl -o ${{ github.workspace }}/trivy-html.tpl
+
+    - name: Generate Trivy HTML report
+      uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+      with:
+        exit-code: 0
+        format: template
+        hide-progress: true
+        ignore-unfixed: true
+        input: ${{ github.workspace }}/image.tar
+        list-all-pkgs: true
+        output: ${{ github.workspace }}/trivy-report.html
+        scanners: vuln,config
+        skip-setup-trivy: true
+        template: "@${{ github.workspace }}/trivy-html.tpl"
+        trivyignores: .trivyignore.yaml
+
+    - name: Upload Trivy HTML report
+      uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+      with:
+        name: trivy-report-html
+        path: ${{ github.workspace }}/trivy-report.html
+        retention-days: 30
+
+    - name: Generate Trivy table report
+      uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+      with:
+        exit-code: 0
+        format: table
+        hide-progress: true
+        ignore-unfixed: true
+        input: ${{ github.workspace }}/image.tar
+        list-all-pkgs: true
+        output: ${{ github.workspace }}/trivy-report.txt
+        scanners: vuln,secret,config
+        skip-setup-trivy: true
+        trivyignores: .trivyignore.yaml
+
+    - name: Scan image with Trivy and fail pipeline if vulnerabilities are found
+      id: trivy
+      uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+      with:
+        exit-code: 1
+        format: table
+        hide-progress: true
+        ignore-unfixed: true
+        input: ${{ github.workspace }}/image.tar
+        list-all-pkgs: true
+        scanners: vuln,secret,config
+        severity: CRITICAL
+        skip-setup-trivy: true
+        trivyignores: .trivyignore.yaml
+
+    - name: Should we push
+      id: should-push
+      run: |
+        if [ "${{ github.event_name }}" == "push" ] && [ "${{ github.ref }}" == "refs/heads/main" ]; then
+          echo "push_image=true" >> $GITHUB_OUTPUT
+        elif [ "${{ github.event_name }}" == "schedule" ]; then
+          echo "push_image=true" >> $GITHUB_OUTPUT
+        elif [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+          echo "push_image=true" >> $GITHUB_OUTPUT
+        else
+          echo "push_image=false" >> $GITHUB_OUTPUT
+        fi
+
+    - name: Log in to the container registry
+      if: steps.should-push.outputs.push_image == 'true'
+      uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+      with:
+        registry: ${{ env.REGISTRY }}
+        password: ${{ secrets.QUAY_PASSWORD }}
+        username: ${{ secrets.QUAY_USERNAME }}
+
+    - name: Push image to registry
+      if: steps.should-push.outputs.push_image == 'true'
+      run: |
+        docker image push -a ${{ env.REGISTRY }}/${{ env.IMAGE_REPOSITORY }}/${{ env.IMAGE_NAME }}

@@ -27,10 +27,10 @@ docker run -d \
   squid
 ```
 
-| Mount | Purpose |
-|---|---|
-| `/squid-state` | Persistent TLS certificate database (`ssl_db`) |
-| `/etc/squid/squid.conf` | Your Squid configuration file |
+| Mount                   | Purpose                                        |
+| ----------------------- | ---------------------------------------------- |
+| `/squid-state`          | Persistent TLS certificate database (`ssl_db`) |
+| `/etc/squid/squid.conf` | Your Squid configuration file                  |
 
 Squid listens on port **3128** by default.
 
